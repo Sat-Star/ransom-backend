@@ -1,0 +1,11 @@
+Timestamp,User,Login_Success,Privilege_Escalation,Label
+2024-09-15 12:45,Admin.Jones,1,1,1
+2024-09-15 12:46,Dr.Smith,1,0,0
+2024-09-15 12:47,Nurse.Brown,1,0,0
+2024-09-15 12:48,Admin.Jones,1,1,1
+2024-09-15 12:49,Tech.Admin,1,1,1
+2024-09-15 12:50,Nurse.Brown,1,0,0
+2024-09-15 12:51,Admin.Jones,0,1,1
+2024-09-15 12:52,Dr.Smith,1,0,0
+2024-09-15 12:53,Tech.Admin,0,1,1
+2024-09-15 12:54,Nurse.Brown,1,0,0
