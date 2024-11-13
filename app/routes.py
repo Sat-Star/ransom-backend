@@ -13,9 +13,9 @@ def get_model_path(filename):
     return os.path.join(os.path.dirname(__file__), 'models', filename)
 
 def load_model_and_scaler():
-    model_path = get_model_path('ransomware_model.pkl')
-    scaler_path = get_model_path('scaler.pkl')
-    label_encoder_path = get_model_path('label_encoder.pkl')
+    model_path = get_model_path('ransomware_model_3.0.pkl')
+    scaler_path = get_model_path('scaler_3.0.pkl')
+    label_encoder_path = get_model_path('label_encoder_3.0.pkl')
     
     with open(model_path, 'rb') as f:
         model = pickle.load(f)
@@ -26,18 +26,21 @@ def load_model_and_scaler():
     
     return model, scaler, label_encoder
 
-def process_dataframe(df):
+def process_dataframe(df, label_encoder):
     # Handle missing values
     df.fillna(0, inplace=True)
     
-    # Encode categorical variables
-    label_encoder = LabelEncoder()
+    # Encode categorical variables using the loaded label encoder
     if 'File_Operation' in df.columns:
-        df['File_Operation'] = label_encoder.fit_transform(df['File_Operation'])
+        df['File_Operation'] = df['File_Operation'].apply(lambda x: label_encoder.transform([x])[0]
+                                                          if x in label_encoder.classes_ 
+                                                          else -1)
     if 'User' in df.columns:
-        df['User'] = label_encoder.fit_transform(df['User'])
+        df['User'] = df['User'].apply(lambda x: label_encoder.transform([x])[0]
+                                      if x in label_encoder.classes_
+                                      else -1)
     
-    return df, label_encoder
+    return df
 
 @main_bp.route('/predict', methods=['POST'])
 def predict():
@@ -56,18 +59,33 @@ def predict():
         df = pd.merge(df, system_performance, on='Timestamp', how='outer')
         df = pd.merge(df, user_behavior, on='Timestamp', how='outer')
         
+        # Debugging unique types for each column
+        debug_info = {}
+        for column in df.columns:
+            unique_types = df[column].apply(type).unique()
+            debug_info[column] = str(unique_types)
+        
+        # Load model and encoders
+        model, scaler, label_encoder = load_model_and_scaler()
+        
         # Process dataframe
-        df, label_encoder = process_dataframe(df)
+        df = process_dataframe(df, label_encoder)
         
-        # Load model and make predictions
-        model, scaler, saved_label_encoder = load_model_and_scaler()
+        # Define feature columns and ensure they are present
+        feature_columns = [
+            'File_Operation', 'File_Size_MB', 'Network_Bytes', 
+            'CPU_Usage', 'Disk_IO', 'Memory_Usage', 'Login_Success', 
+            'Privilege_Escalation'
+        ]
+        missing_features = [col for col in feature_columns if col not in df.columns]
+        if missing_features:
+            raise KeyError(f"Missing required feature columns: {missing_features}")
         
-        feature_columns = ['File_Operation', 'File_Size_MB', 'Network_Bytes', 
-                          'CPU_Usage', 'Disk_IO', 'Memory_Usage', 'Login_Success', 
-                          'Privilege_Escalation']
-        
+        # Extract features and scale them
         X = df[feature_columns]
         X_scaled = scaler.transform(X)
+        
+        # Make predictions
         predictions = model.predict(X_scaled)
         
         # Prepare response
@@ -84,7 +102,12 @@ def predict():
         return jsonify(response)
     
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 400
+        # Return error with debug info
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'debug': debug_info
+        }), 400
 
 @main_bp.route('/health', methods=['GET'])
 def health_check():
